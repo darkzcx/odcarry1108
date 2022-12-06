@@ -128,3 +128,44 @@ if __name__ == '__main__':
     lg.add_param(a=1,b=2)
     lg.finish_model()
     print('done')
+
+    
+    
+    
+    
+    class FGMtrainer(Trainer):
+    def attack(self, epsilon=1.5, emb_name='word_embeddings'):
+        self.backup = {}
+
+        # emb_name这个参数要换成你模型中embedding的参数名
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                self.backup[name] = param.data.clone()
+                norm = torch.norm(param.grad)
+                if norm != 0 and not torch.isnan(norm):
+                    r_at = epsilon * param.grad / norm
+                    param.data.add_(r_at)
+
+    def restore(self, emb_name='word_embeddings'):
+        # emb_name这个参数要换成你模型中embedding的参数名
+        for name, param in self.model.named_parameters():
+            if param.requires_grad and emb_name in name:
+                assert name in self.backup
+                param.data = self.backup[name]
+        self.backup = {}
+    def training_step(self, model: nn.Module, inputs: Dict[str, Union[torch.Tensor, Any]]) -> torch.Tensor:
+        model.train()
+        inputs = self._prepare_inputs(inputs)
+
+        with self.compute_loss_context_manager():
+            loss = self.compute_loss(model, inputs)
+
+        loss.backward()
+
+        self.attack()
+        with self.compute_loss_context_manager():
+            loss_ad = self.compute_loss(model, inputs)
+
+        loss_ad.backward()
+        self.restore()
+        return loss.detach()
