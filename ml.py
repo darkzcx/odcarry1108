@@ -169,3 +169,24 @@ if __name__ == '__main__':
         loss_ad.backward()
         self.restore()
         return loss.detach()
+    
+    
+   
+from functools import wraps
+from flask import request
+def insure(f):
+    @wraps(f)
+    def inner(*args,**kwargs):
+        arg1 = {k:v for k,v in request.values.items()}
+        if request.headers.get('Content-Type') == 'application/json':
+            arg2 = request.json
+        else:
+            arg2 = {}
+        request.uni_args = {**arg1,**arg2}
+        try:
+            inner_res = f(*args,**kwargs)
+        except:
+            return abort(404)
+        return inner_res
+
+    return inner
